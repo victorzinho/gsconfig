@@ -43,6 +43,7 @@ if GSPARAMS['GEOSERVER_HOME']:
 
 # set GS_VERSION to None in order to skip the GeoServer setup
 global child_pid
+child_pid = None
 GS_BASE_DIR = tempfile.gettempdir()
 # use "master" in order to test against the latest GeoServer version
 if GSPARAMS['GS_VERSION']:
