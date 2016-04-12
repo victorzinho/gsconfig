@@ -635,7 +635,12 @@ class ModifyingTests(unittest.TestCase):
         # test saving round trip
         lyr = self.cat.get_layer("states")
         old_attribution = lyr.attribution
-        new_attribution = "Not the original attribution"
+        new_attribution = { 'title': 'Not the original attribution',
+                            'width': '123',
+                            'height': '321',
+                            'href': 'http://www.georchestra.org',
+                            'url': 'https://www.cigalsace.org/portail/cigal/documents/page/mentions-legales/Logo_geOrchestra.jpg',
+                            'type': 'image/jpeg' }
 
         # change attribution on server
         lyr.attribution = new_attribution
