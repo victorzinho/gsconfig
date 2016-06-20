@@ -429,7 +429,7 @@ class Catalog(object):
             message.close()
             unlink(archive)
 
-    def create_imagemosaic(self, name, data, configure=None, workspace=None, overwrite=False, charset=None):
+    def create_imagemosaic(self, name, data, configure=None, workspace=None, overwrite=False, charset=None, external=False):
         if not overwrite:
             try:
                 store = self.get_store(name, workspace)
@@ -449,22 +449,34 @@ class Catalog(object):
             params['charset'] = charset
         if configure is not None:
             params['configure'] = "none"
+        if external:
+            store_type = "external.imagemosaic"
+            contet_type = "text/plain"
+            data = data if data.startswith("file:") else "file:{data}".format(data=data)
+        else:
+            store_type = "file.imagemosaic"
+            contet_type = "application/zip"
         cs_url = url(self.service_url,
-            ["workspaces", workspace, "coveragestores", name, "file.imagemosaic"], params)
+            ["workspaces", workspace, "coveragestores", name, store_type], params)
 
         # PUT /workspaces/<ws>/coveragestores/<name>/file.imagemosaic?configure=none
-        headers = {
-            "Content-type": "application/zip",
+        req_headers = {
+            "Content-type": contet_type,
             "Accept": "application/xml"
         }
+
         if isinstance(data, basestring):
-            message = open(data, 'rb')
+            if external:
+                message = data
+            else:
+                message = open(data, 'rb')
         else:
-            message = data
+            raise ValueError("ImageMosaic Dataset or directory: {data} is incorrect".format(data=data))
+
         try:
-            headers, response = self.http.request(cs_url, "PUT", message, headers)
+            resp_headers, response = self.http.request(cs_url, "PUT", message, req_headers)
             self._cache.clear()
-            if headers.status != 201:
+            if resp_headers.status != 201:
                 raise UploadError(response)
         finally:
             if hasattr(message, "close"):
