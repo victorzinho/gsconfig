@@ -449,13 +449,24 @@ class Catalog(object):
             params['charset'] = charset
         if configure is not None:
             params['configure'] = "none"
+
         if external:
             store_type = "external.imagemosaic"
             contet_type = "text/plain"
             data = data if data.startswith("file:") else "file:{data}".format(data=data)
+            if isinstance(data, basestring):
+                message = data
         else:
             store_type = "file.imagemosaic"
             contet_type = "application/zip"
+            if isinstance(data, basestring):
+                message = open(data, 'rb')
+            elif isinstance(data, file):
+                # Adding this check only to pass tests. We should drop support for passing a file object
+                message = data
+            else:
+                raise ValueError("ImageMosaic Dataset or directory: {data} is incorrect".format(data=data))
+
         cs_url = url(self.service_url,
             ["workspaces", workspace, "coveragestores", name, store_type], params)
 
@@ -464,14 +475,6 @@ class Catalog(object):
             "Content-type": contet_type,
             "Accept": "application/xml"
         }
-
-        if isinstance(data, basestring):
-            if external:
-                message = data
-            else:
-                message = open(data, 'rb')
-        else:
-            raise ValueError("ImageMosaic Dataset or directory: {data} is incorrect".format(data=data))
 
         try:
             resp_headers, response = self.http.request(cs_url, "PUT", message, req_headers)
