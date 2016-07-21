@@ -227,18 +227,17 @@ class Catalog(object):
         self._cache.clear()
         return response
 
-    def save(self, obj):
+    def save(self, obj, content_type="application/xml"):
         """
         saves an object to the REST service
-
-        gets the object's REST location and the XML from the object,
+        gets the object's REST location and the data from the object,
         then POSTS the request.
         """
         rest_url = obj.href
         message = obj.message()
 
         headers = {
-            "Content-type": "application/xml",
+            "Content-type": content_type,
             "Accept": "application/xml"
         }
         logger.debug("%s %s", obj.save_method, obj.href)
