@@ -238,7 +238,7 @@ class Catalog(object):
 
         headers = {
             "Content-type": content_type,
-            "Accept": "application/xml"
+            "Accept": content_type
         }
         logger.debug("%s %s", obj.save_method, obj.href)
         response = self.http.request(rest_url, obj.save_method, message, headers)
