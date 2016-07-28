@@ -77,7 +77,7 @@ class Catalog(object):
             self.service_url = self.service_url.strip("/")
         self.username = username
         self.password = password
-        self.diable_ssl_cert_validation = disable_ssl_certificate_validation
+        self.disable_ssl_cert_validation = disable_ssl_certificate_validation
         self.http = None
         self.setup_connection()
 
@@ -102,7 +102,7 @@ class Catalog(object):
 
     def setup_connection(self):
         self.http = httplib2.Http(
-            disable_ssl_certificate_validation=self.diable_ssl_cert_validation)
+            disable_ssl_certificate_validation=self.disable_ssl_cert_validation)
         self.http.add_credentials(self.username, self.password)
         netloc = urlparse(self.service_url).netloc
         self.http.authorizations.append(
@@ -347,7 +347,7 @@ class Catalog(object):
         headers, response = self.http.request(wms_url, "POST", data, headers)
 
         self._cache.clear()
-        if headers.status < 200 or headers.status > 299: raise UploadError(response) 
+        if headers.status < 200 or headers.status > 299: raise UploadError(response)
         return self.get_resource(name, store=store, workspace=workspace)
 
     def add_data_to_store(self, store, name, data, workspace=None, overwrite = False, charset = None):
@@ -372,8 +372,8 @@ class Catalog(object):
             params["charset"] = charset
 
         headers = { 'Content-Type': 'application/zip', 'Accept': 'application/xml' }
-        upload_url = url(self.service_url, 
-            ["workspaces", workspace, "datastores", store, "file.shp"], params) 
+        upload_url = url(self.service_url,
+            ["workspaces", workspace, "datastores", store, "file.shp"], params)
 
         try:
             with open(bundle, "rb") as f:
@@ -651,14 +651,14 @@ class Catalog(object):
             "Content-type": "application/xml",
             "Accept": "application/xml"
         }
-        
+
         resource_url=store.resource_url
         if jdbc_virtual_table is not None:
             feature_type.metadata=({'JDBC_VIRTUAL_TABLE':jdbc_virtual_table})
             params = dict()
             resource_url=url(self.service_url,
                 ["workspaces", store.workspace.name, "datastores", store.name, "featuretypes.json"], params)
-        
+
         headers, response = self.http.request(resource_url, "POST", feature_type.message(), headers)
         feature_type.fetch()
         return feature_type
@@ -671,7 +671,7 @@ class Catalog(object):
                 store = self.get_store(store, workspace)
             if store is not None:
                 return store.get_resources(name)
-        
+
         if store is not None:
             candidates = [s for s in self.get_resources(store) if s.name == name]
             if len(candidates) == 0:
@@ -743,7 +743,7 @@ class Catalog(object):
         return lyrs
 
     def get_layergroup(self, name=None, workspace=None):
-        try: 
+        try:
             path_parts = ["layergroups", name + ".xml"]
             if workspace is not None:
                 wks_name = _name(workspace)
