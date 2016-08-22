@@ -509,7 +509,7 @@ class ModifyingTests(unittest.TestCase):
 
     def testWmsStoreCreate(self):
         ws = self.cat.create_wmsstore("wmsstore_gsconfig")
-        ws.capabilitiesURL = "http://suite.opengeo.org/geoserver/ows?service=wms&version=1.1.1&request=GetCapabilities"
+        ws.capabilitiesURL = "http://mesonet.agron.iastate.edu/cgi-bin/wms/iowa/rainfall.cgi?VERSION=1.1.1&REQUEST=GetCapabilities&SERVICE=WMS&"
         ws.type = "WMS"
         self.cat.save(ws)
 
@@ -517,7 +517,7 @@ class ModifyingTests(unittest.TestCase):
         self.cat.create_workspace("wmstest", "http://example.com/wmstest")
         wmstest = self.cat.get_workspace("wmstest")
         wmsstore = self.cat.create_wmsstore("wmsstore", wmstest)
-        wmsstore.capabilitiesURL = "http://suite.opengeo.org/geoserver/ows?service=wms&version=1.1.1&request=GetCapabilities"
+        wmsstore.capabilitiesURL = "http://mesonet.agron.iastate.edu/cgi-bin/wms/iowa/rainfall.cgi?VERSION=1.1.1&REQUEST=GetCapabilities&SERVICE=WMS&"
         wmsstore.type = "WMS"
         self.cat.save(wmsstore)
         wmsstore = self.cat.get_store("wmsstore")
