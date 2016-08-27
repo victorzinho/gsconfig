@@ -130,12 +130,14 @@ class CatalogTests(unittest.TestCase):
 
     def testWorkspaces(self):
         self.assertEqual(7, len(self.cat.get_workspaces()))
+        self.assertEqual(0, len(self.cat.get_workspaces(name="nonexistentworkspace")))
         # marking out test since geoserver default workspace is not consistent
         # self.assertEqual("cite", self.cat.get_default_workspace().name)
         self.assertEqual("topp", self.cat.get_workspace("topp").name)
 
 
     def testStores(self):
+        self.assertEqual(0, len(self.cat.get_stores(name="nonexistentstore")))
         topp = self.cat.get_workspace("topp")
         sf = self.cat.get_workspace("sf")
         self.assertEqual(9, len(self.cat.get_stores()))
