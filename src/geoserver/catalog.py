@@ -424,7 +424,7 @@ class Catalog(object):
             message.close()
             os.unlink(archive)
 
-    def create_imagemosaic(self, name, data, configure=None, workspace=None, overwrite=False, charset=None, external=False):
+    def create_imagemosaic(self, name, data, configure=None, workspace=None, overwrite=False, charset=None):
         if not overwrite:
             try:
                 store = self.get_store(name, workspace)
@@ -445,22 +445,24 @@ class Catalog(object):
         if configure is not None:
             params['configure'] = "none"
 
-        if external:
-            store_type = "external.imagemosaic"
-            contet_type = "text/plain"
-            data = data if data.startswith("file:") else "file:{data}".format(data=data)
-            if isinstance(data, basestring):
-                message = data
-        else:
+        ext = os.path.splitext(data)[-1]
+        if ext == ".zip" or isinstance(data, file):
             store_type = "file.imagemosaic"
             contet_type = "application/zip"
             if isinstance(data, basestring):
-                message = open(data, 'rb')
+                upload_data = open(data, 'rb')
             elif isinstance(data, file):
                 # Adding this check only to pass tests. We should drop support for passing a file object
-                message = data
+                upload_data = data
             else:
                 raise ValueError("ImageMosaic Dataset or directory: {data} is incorrect".format(data=data))
+        else:
+            store_type = "external.imagemosaic"
+            contet_type = "text/plain"
+            if isinstance(data, basestring):
+                upload_data = data if data.startswith("file:") else "file:{data}".format(data=data)
+            else:
+                raise ValueError("ImageMosaic Dataset or directory: {data} is incorrect".format(data=data)) 
 
         cs_url = url(
             self.service_url,
@@ -481,13 +483,15 @@ class Catalog(object):
         }
 
         try:
-            resp_headers, response = self.http.request(cs_url, "PUT", message, req_headers)
+            resp_headers, response = self.http.request(cs_url, "PUT", upload_data, req_headers)
             self._cache.clear()
             if resp_headers.status != 201:
                 raise UploadError(response)
         finally:
-            if hasattr(message, "close"):
-                message.close()
+            if hasattr(upload_data, "close"):
+                upload_data.close()
+
+        return "Image Mosaic created"
 
     def create_coveragestore(self, name, data, workspace=None, overwrite=False):
         self._create_coveragestore(name, data, workspace, overwrite)
