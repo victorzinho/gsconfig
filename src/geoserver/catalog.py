@@ -279,9 +279,12 @@ class Catalog(object):
         workspaces = []
         if workspace is not None:
             if isinstance(workspace, basestring):
-                workspace = self.get_workspace(workspace)
-
-            workspaces.append(workspace)
+                ws = self.get_workspaces(workspace)
+                if ws:
+                    # There can only be one workspace with this name
+                    workspaces.append(ws[0])
+            elif hasattr(workspace, 'resource_type') and workspace.resource_type == "workspace":
+              workspaces.append(workspace)
         else:
             workspaces = self.get_workspaces()
 
