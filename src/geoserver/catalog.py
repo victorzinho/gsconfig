@@ -252,14 +252,14 @@ class Catalog(object):
     def get_store(self, name, workspace=None):
         '''
           Returns a single store object.
-          Will raise an error if no store is found.
+          Will return None if no store is found.
           Will raise an error if more than one store with the same name is found.
         '''
 
         stores = self.get_stores(workspace=workspace, name=name)
 
         if stores.__len__() == 0:
-            raise FailedRequestError("No store found named: " + name)
+            return None
         elif stores.__len__() > 1:
             multiple_stores = []
             for s in stores:
@@ -992,7 +992,9 @@ class Catalog(object):
         headers, response = self.http.request(workspace_url, "POST", xml, headers)
         assert 200 <= headers.status < 300, "Tried to create workspace but got " + str(headers.status) + ": " + response
         self._cache.pop("%s/workspaces.xml" % self.service_url, None)
-        return self.get_workspace(name)
+        workspaces = self.get_workspaces(name)
+        # Can only have one workspace with this name
+        return workspaces[0] if workspaces else None
 
     def get_workspaces(self, name=None):
         '''
