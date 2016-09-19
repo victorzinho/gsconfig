@@ -256,7 +256,7 @@ class Catalog(object):
           Will raise an error if more than one store with the same name is found.
         '''
 
-        stores = self.get_stores(workspace=workspace, name=name)
+        stores = self.get_stores(workspace=workspace, names=name)
 
         if stores.__len__() == 0:
             return None
@@ -269,10 +269,12 @@ class Catalog(object):
         else:
             return stores[0]
 
-    def get_stores(self, workspace=None, name=None):
+    def get_stores(self, names=None, workspace=None):
         '''
-          Returns a list of stores in the catalog. If workspace is specified will only return stores in that workspace. 
-          If name is specified will only return stores that match the name.
+          Returns a list of stores in the catalog. If workspace is specified will only return stores in that workspace.
+          If names is specified, will only return stores that match.
+          names can either be a comma delimited string or an array.
+          If names is specified will only return stores that match the name.
           Will return an empty list if no stores are found.
         '''
 
@@ -298,10 +300,14 @@ class Catalog(object):
                 stores.extend([coveragestore_from_index(self, ws, n) for n in cs_list.findall("coverageStore")])
                 stores.extend([wmsstore_from_index(self, ws, n) for n in wms_list.findall("wmsStore")])
 
-        if name is not None and stores:
+        if names is None:
+            names = []
+        elif isinstance(names, basestring):
+            names = map(str.strip, names.split(','))
+        if stores and names:
             named_stores = []
             for store in stores:
-                if store.name == name:
+                if store.name in names:
                     named_stores.append(store)
             return named_stores
 
@@ -431,10 +437,11 @@ class Catalog(object):
         if not overwrite:
             try:
                 store = self.get_store(name, workspace)
-                msg = "There is already a store named " + name
-                if workspace:
-                    msg += " in " + str(workspace)
-                raise ConflictingDataError(msg)
+                if store is not None:
+                  msg = "There is already a store named " + name
+                  if workspace:
+                      msg += " in " + str(workspace)
+                  raise ConflictingDataError(msg)
             except FailedRequestError:
                 # we don't really expect that every layer name will be taken
                 pass
@@ -448,8 +455,7 @@ class Catalog(object):
         if configure is not None:
             params['configure'] = "none"
 
-        ext = os.path.splitext(data)[-1]
-        if ext == ".zip" or isinstance(data, file):
+        if isinstance(data, file) or os.path.splitext(data)[-1] == ".zip":
             store_type = "file.imagemosaic"
             contet_type = "application/zip"
             if isinstance(data, basestring):
@@ -820,7 +826,7 @@ class Catalog(object):
                 return candidates[0]
 
         if workspace is not None:
-            for store in self.get_stores(workspace):
+            for store in self.get_stores(workspace=workspace):
                 resource = self.get_resource(name, store)
                 if resource is not None:
                     return resource
@@ -853,7 +859,7 @@ class Catalog(object):
             return store.get_resources()
         if workspace is not None:
             resources = []
-            for store in self.get_stores(workspace):
+            for store in self.get_stores(workspace=workspace):
                 resources.extend(self.get_resources(store))
             return resources
         resources = []
@@ -996,20 +1002,26 @@ class Catalog(object):
         # Can only have one workspace with this name
         return workspaces[0] if workspaces else None
 
-    def get_workspaces(self, name=None):
+    def get_workspaces(self, names=None):
         '''
-          Returns a list of workspaces in the catalog. 
-          If name is specified will only return workspace that matches the name (List with a single object).
+          Returns a list of workspaces in the catalog.
+          If names is specified, will only return workspaces that match.
+          names can either be a comma delimited string or an array.
           Will return an empty list if no workspaces are found.
         '''
+        if names is None:
+            names = []
+        elif isinstance(names, basestring):
+            names = map(str.strip, names.split(','))
+
         description = self.get_xml("%s/workspaces.xml" % self.service_url)
         workspaces = []
         workspaces.extend([workspace_from_index(self, node) for node in description.findall("workspace")])
-        
-        if workspaces and name is not None:
+
+        if workspaces and names:
             named_workspaces = []
             for ws in workspaces:
-                if ws.name == name:
+                if ws.name in names:
                     named_workspaces.append(ws)
             return named_workspaces
 
@@ -1022,7 +1034,7 @@ class Catalog(object):
           Will raise an error if more than one workspace with the same name is found.
         '''
 
-        workspaces = self.get_workspaces(name=name)
+        workspaces = self.get_workspaces(name)
 
         if len(workspaces) == 0:
             return None
