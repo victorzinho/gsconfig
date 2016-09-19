@@ -281,18 +281,7 @@ class CatalogTests(unittest.TestCase):
         # misconstructed URLS
         self.cat.get_style("best style ever")
         self.cat.get_workspace("best workspace ever")
-        try:
-            self.cat.get_store(workspace="best workspace ever",
-                name="best store ever")
-            self.fail('expected exception')
-        except FailedRequestError, fre:
-            self.assertEqual('No store found named: best store ever', fre.message)
-        try:
-            self.cat.get_resource(workspace="best workspace ever",
-                store="best store ever",
-                name="best resource ever")
-        except FailedRequestError, fre:
-            self.assertEqual('No store found named: best store ever', fre.message)
+        self.assertEquals(self.cat.get_store(workspace="best workspace ever", name="best store ever"), None)
         self.cat.get_layer("best layer ever")
         self.cat.get_layergroup("best layergroup ever")
 
@@ -529,7 +518,7 @@ class ModifyingTests(unittest.TestCase):
         wmsstore.type = "WMS"
         self.cat.save(wmsstore)
         wmsstore = self.cat.get_store("wmsstore")
-        self.assertEqual(1, len(self.cat.get_stores(wmstest)))
+        self.assertEqual(1, len(self.cat.get_stores(workspace=wmstest)))
         available_layers = wmsstore.get_resources(available=True)
         for layer in available_layers:
             # sanitize the layer name - validation will fail on newer geoservers

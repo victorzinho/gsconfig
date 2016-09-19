@@ -392,15 +392,12 @@ class Catalog(object):
 
     def create_featurestore(self, name, data, workspace=None, overwrite=False, charset=None):
         if not overwrite:
-            try:
-                store = self.get_store(name, workspace)
+            store = self.get_store(name, workspace)
+            if store is not None:
                 msg = "There is already a store named " + name
                 if workspace:
                     msg += " in " + str(workspace)
                 raise ConflictingDataError(msg)
-            except FailedRequestError:
-                # we don't really expect that every layer name will be taken
-                pass
 
         if workspace is None:
             workspace = self.get_default_workspace()
@@ -435,16 +432,12 @@ class Catalog(object):
 
     def create_imagemosaic(self, name, data, configure=None, workspace=None, overwrite=False, charset=None):
         if not overwrite:
-            try:
-                store = self.get_store(name, workspace)
-                if store is not None:
-                  msg = "There is already a store named " + name
-                  if workspace:
-                      msg += " in " + str(workspace)
-                  raise ConflictingDataError(msg)
-            except FailedRequestError:
-                # we don't really expect that every layer name will be taken
-                pass
+            store = self.get_store(name, workspace)
+            if store is not None:
+                msg = "There is already a store named " + name
+                if workspace:
+                    msg += " in " + str(workspace)
+                raise ConflictingDataError(msg)
 
         if workspace is None:
             workspace = self.get_default_workspace()
@@ -510,15 +503,12 @@ class Catalog(object):
 
     def _create_coveragestore(self, name, data, workspace=None, overwrite=False, external=False):
         if not overwrite:
-            try:
-                store = self.get_store(name, workspace)
+            store = self.get_store(name, workspace)
+            if store is not None:
                 msg = "There is already a store named " + name
                 if workspace:
                     msg += " in " + str(workspace)
                 raise ConflictingDataError(msg)
-            except FailedRequestError:
-                # we don't really expect that every layer name will be taken
-                pass
 
         if workspace is None:
             workspace = self.get_default_workspace()
