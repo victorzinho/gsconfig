@@ -55,8 +55,7 @@ DBPARAMS = dict(
     user=os.getenv("DBUSER", "postgres"),
     passwd=os.getenv("DBPASS", "password")
 )
-print '*** GSPARAMS ***'
-print GSPARAMS
-print '*** DBPARAMS ***'
-print DBPARAMS
-print '****************'
+print('*** GSPARAMS ***')
+print(GSPARAMS)
+print('*** DBPARAMS ***')
+print(DBPARAMS)

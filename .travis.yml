@@ -1,48 +1,47 @@
+sudo: required
 language: python
+dist: trusty
+
 addons:
-  postgresql: "9.3"
+  postgresql: "9.6"
+  apt:
+    packages:
+    - postgresql-9.6-postgis-2.3
+
 services:
  - postgresql
 matrix:
   include:
-    - python: "2.6"
-      env: GS_VERSION=2.4.x
-    - python: "2.6"
-      env: GS_VERSION=2.5.x
-    - python: "2.6"
-      env: GS_VERSION=2.6.x
-    - python: "2.6"
-      env: GS_VERSION=2.7.x
-    - python: "2.6"
-      env: GS_VERSION=2.8.x
     - python: "2.7"
-      env: GS_VERSION=2.4.x
+      env: GS_VERSION=2.9.x
     - python: "2.7"
-      env: GS_VERSION=2.5.x
+      env: GS_VERSION=2.11.x
     - python: "2.7"
-      env: GS_VERSION=2.6.x
-    - python: "2.7"
-      env: GS_VERSION=2.7.x
-    - python: "2.7"
-      env: GS_VERSION=2.8.x
+      env: GS_VERSION=master
+    - python: "3.6"
+      env: GS_VERSION=2.9.x
+    - python: "3.6"
+      env: GS_VERSION=2.11.x
+    - python: "3.6"
+      env: GS_VERSION=master
 install:
   - sudo apt-get -qq -y update
-  - sudo apt-get install -y --force-yes openjdk-7-jdk --no-install-recommends
+  - sudo apt-get install -y --force-yes openjdk-8-jdk --no-install-recommends
   - mkdir gs
   - pushd gs
-  - wget http://repo2.maven.org/maven2/org/mortbay/jetty/jetty-runner/8.1.8.v20121106/jetty-runner-8.1.8.v20121106.jar
+  - wget http://central.maven.org/maven2/org/eclipse/jetty/jetty-runner/9.4.5.v20170502/jetty-runner-9.4.5.v20170502.jar
   - wget http://ares.boundlessgeo.com/geoserver/${GS_VERSION}/geoserver-${GS_VERSION}-latest-war.zip
   - unzip geoserver-${GS_VERSION}-latest-war.zip
   - popd
   - pip install .
   - pip install psycopg2
 before_script:
+  - java -Xmx1024m -Dorg.eclipse.jetty.server.webapp.parentLoaderPriority=true -jar gs/jetty-runner-9.4.5.v20170502.jar --path /geoserver gs/geoserver.war > /dev/null 2>&1 &
   - psql -U postgres -c "create extension postgis"
   - psql -U postgres -c "create database db;"
   - psql -U postgres -d db -c "create extension postgis"
   - psql -U postgres -c "alter user postgres with password 'password';"
-  - java -Xmx512m -XX:MaxPermSize=256m -Dorg.eclipse.jetty.server.webapp.parentLoaderPriority=true -jar gs/jetty-runner-8.1.8.v20121106.jar --path /geoserver gs/geoserver.war > /dev/null 2>&1 &
-  - sleep 90
+  - sleep 30
 script:
   - python setup.py test
 notifications:

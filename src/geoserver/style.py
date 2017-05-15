@@ -4,11 +4,12 @@ gsconfig is a python library for manipulating a GeoServer instance via the GeoSe
 The project is distributed under a MIT License .
 '''
 
-__author__ = "David Winslow"
-__copyright__ = "Copyright 2012-2015 Boundless, Copyright 2010-2012 OpenPlans"
-__license__ = "MIT"
+from geoserver.support import ResourceInfo, build_url, xml_property
+try:
+    from past.builtins import basestring
+except ImportError:
+    pass
 
-from geoserver.support import ResourceInfo, url, xml_property
 
 class Style(ResourceInfo):
     supported_formats = ["sld10", "sld11", "zip"]
@@ -58,7 +59,7 @@ class Style(ResourceInfo):
             query['name'] = self.name
         if self.workspace is not None:
             path_parts = ["workspaces", getattr(self.workspace, 'name', self.workspace)] + path_parts
-        return url(self.catalog.service_url, path_parts, query)
+        return build_url(self.catalog.service_url, path_parts, query)
 
     filename = xml_property("filename")
 
@@ -72,14 +73,14 @@ class Style(ResourceInfo):
         user_style = self._get_sld_dom().find("{http://www.opengis.net/sld}NamedLayer/{http://www.opengis.net/sld}UserStyle")
         if not user_style:
             user_style = self._get_sld_dom().find("{http://www.opengis.net/sld}UserLayer/{http://www.opengis.net/sld}UserStyle")
-        
+
         if user_style:
             try:
                 # it is not mandatory
                 title_node = user_style.find("{http://www.opengis.net/sld}Title")
             except:
                 title_node = None
-        
+
         return title_node.text if title_node is not None else None
 
     @property
@@ -87,22 +88,22 @@ class Style(ResourceInfo):
         user_style = self._get_sld_dom().find("{http://www.opengis.net/sld}NamedLayer/{http://www.opengis.net/sld}UserStyle")
         if not user_style:
             user_style = self._get_sld_dom().find("{http://www.opengis.net/sld}UserLayer/{http://www.opengis.net/sld}UserStyle")
-        
+
         if user_style:
             try:
                 # it is not mandatory
                 name_node = user_style.find("{http://www.opengis.net/sld}Name")
             except:
                 name_node = None
-            
+
         return name_node.text if name_node is not None else None
 
     @property
     def sld_body(self):
-        content = self.catalog.http.request(self.body_href)[1]
-        return content
+        resp = self.catalog.http_request(self.body_href)
+        return resp.content
 
     def update_body(self, body):
-        headers = { "Content-Type": self.content_type }
+        headers = {"Content-Type": self.content_type}
         self.catalog.http.request(
             self.body_href, "PUT", body, headers)

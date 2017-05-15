@@ -4,37 +4,43 @@ gsconfig is a python library for manipulating a GeoServer instance via the GeoSe
 The project is distributed under a MIT License .
 '''
 
-__author__ = "David Winslow"
-__copyright__ = "Copyright 2012-2015 Boundless, Copyright 2010-2012 OpenPlans"
-__license__ = "MIT"
-
 import logging
 from xml.etree.ElementTree import TreeBuilder, tostring
 from tempfile import mkstemp
-import urllib
-import urlparse
 from zipfile import ZipFile
 import os
+
+try:
+    from urllib.parse import urljoin, quote, urlencode, urlparse
+except ImportError:
+    from urlparse import urljoin, urlparse
+    from urllib import quote, urlencode
+
+try:
+    from past.builtins import basestring
+except ImportError:
+    pass
 
 logger = logging.getLogger("gsconfig.support")
 
 FORCE_DECLARED = "FORCE_DECLARED"
-## The projection handling policy for layers that should use coordinates
-## directly while reporting the configured projection to clients.  This should be
-## used when projection information is missing from the underlying datastore.
+# The projection handling policy for layers that should use coordinates
+# directly while reporting the configured projection to clients.  This should be
+# used when projection information is missing from the underlying datastore.
 
 
 FORCE_NATIVE = "FORCE_NATIVE"
-## The projection handling policy for layers that should use the projection
-## information from the underlying storage mechanism directly, and ignore the
-## projection setting.
+# The projection handling policy for layers that should use the projection
+# information from the underlying storage mechanism directly, and ignore the
+# projection setting.
 
 REPROJECT = "REPROJECT"
-## The projection handling policy for layers that should use the projection
-## information from the underlying storage mechanism to reproject to the
-## configured projection.
+# The projection handling policy for layers that should use the projection
+# information from the underlying storage mechanism to reproject to the
+# configured projection.
 
-def url(base, seg, query=None):
+
+def build_url(base, seg, query=None):
     """
     Create a URL from a list of path segments and an optional dict of query
     parameters.
@@ -45,18 +51,19 @@ def url(base, seg, query=None):
         Cleans the segment and encodes to UTF-8 if the segment is unicode.
         """
         segment = segment.strip('/')
-        if isinstance(segment, unicode):
+        if isinstance(segment, basestring):
             segment = segment.encode('utf-8')
         return segment
 
-    seg = (urllib.quote(clean_segment(s)) for s in seg)
+    seg = (quote(clean_segment(s)) for s in seg)
     if query is None or len(query) == 0:
         query_string = ''
     else:
-        query_string = "?" + urllib.urlencode(query)
+        query_string = "?" + urlencode(query)
     path = '/'.join(seg) + query_string
     adjusted_base = base.rstrip('/') + '/'
-    return urlparse.urljoin(adjusted_base, path)
+    return urljoin(adjusted_base, path)
+
 
 def xml_property(path, converter = lambda x: x.text, default=None):
     def getter(self):
@@ -76,14 +83,15 @@ def xml_property(path, converter = lambda x: x.text, default=None):
 
     return property(getter, setter, delete)
 
+
 def bbox(node):
     if node is not None:
         minx = node.find("minx")
         maxx = node.find("maxx")
         miny = node.find("miny")
         maxy = node.find("maxy")
-        crs  = node.find("crs")
-        crs  = crs.text if crs is not None else None
+        crs = node.find("crs")
+        crs = crs.text if crs is not None else None
 
         if (None not in [minx, maxx, miny, maxy]):
             return (minx.text, maxx.text, miny.text, maxy.text, crs)
@@ -92,17 +100,21 @@ def bbox(node):
     else:
         return None
 
+
 def string_list(node):
     if node is not None:
         return [n.text for n in node.findall("string")]
+
 
 def attribute_list(node):
     if node is not None:
         return [n.text for n in node.findall("attribute/name")]
 
+
 def key_value_pairs(node):
     if node is not None:
         return dict((entry.attrib['key'], entry.text) for entry in node.findall("entry"))
+
 
 def write_string(name):
     def write(builder, value):
@@ -112,6 +124,7 @@ def write_string(name):
         builder.end(name)
     return write
 
+
 def write_bool(name):
     def write(builder, b):
         builder.start(name, dict())
@@ -119,12 +132,14 @@ def write_bool(name):
         builder.end(name)
     return write
 
+
 def write_bbox(name):
     def write(builder, b):
         builder.start(name, dict())
         bbox_xml(builder, b)
         builder.end(name)
     return write
+
 
 def write_string_list(name):
     def write(builder, words):
@@ -138,10 +153,11 @@ def write_string_list(name):
         builder.end(name)
     return write
 
+
 def write_dict(name):
     def write(builder, pairs):
         builder.start(name, dict())
-        for k, v in pairs.iteritems():
+        for k, v in pairs.items():
             if k == 'port':
                 v = str(v)
             builder.start("entry", dict(key=k))
@@ -151,10 +167,11 @@ def write_dict(name):
         builder.end(name)
     return write
 
+
 def write_metadata(name):
     def write(builder, metadata):
         builder.start(name, dict())
-        for k, v in metadata.iteritems():
+        for k, v in metadata.items():
             builder.start("entry", dict(key=k))
             if k in ['time', 'elevation'] or k.startswith('custom_dimension'):
                 dimension_info(builder, v)
@@ -168,7 +185,9 @@ def write_metadata(name):
         builder.end(name)
     return write
 
+
 class ResourceInfo(object):
+
     def __init__(self):
         self.dom = None
         self.dirty = dict()
@@ -204,6 +223,7 @@ class ResourceInfo(object):
         msg = tostring(builder.close())
         return msg
 
+
 def prepare_upload_bundle(name, data):
     """GeoServer's REST API uses ZIP archives as containers for file formats such
     as Shapefile and WorldImage which include several 'boxcar' files alongside
@@ -215,7 +235,7 @@ def prepare_upload_bundle(name, data):
     archive when it's done."""
     fd, path = mkstemp()
     zip_file = ZipFile(path, 'w')
-    for ext, stream in data.iteritems():
+    for ext, stream in data.items():
         fname = "%s.%s" % (name, ext)
         if (isinstance(stream, basestring)):
             zip_file.write(stream, fname)
@@ -225,12 +245,14 @@ def prepare_upload_bundle(name, data):
     os.close(fd)
     return path
 
+
 def atom_link(node):
     if 'href' in node.attrib:
         return node.attrib['href']
     else:
         l = node.find("{http://www.w3.org/2005/Atom}link")
         return l.get('href')
+
 
 def atom_link_xml(builder, href):
     builder.start("atom:link", {
@@ -240,6 +262,7 @@ def atom_link_xml(builder, href):
         'xmlns:atom': 'http://www.w3.org/2005/Atom'
     })
     builder.end("atom:link")
+
 
 def bbox_xml(builder, box):
     minx, maxx, miny, maxy, crs = box
@@ -259,6 +282,7 @@ def bbox_xml(builder, box):
         builder.start("crs", {"class": "projected"})
         builder.data(crs)
         builder.end("crs")
+
 
 def dimension_info(builder, metadata):
     if isinstance(metadata, DimensionInfo):
@@ -307,6 +331,7 @@ def dimension_info(builder, metadata):
 
         builder.end("dimensionInfo")
 
+
 class DimensionInfo(object):
 
     _lookup = (
@@ -314,11 +339,13 @@ class DimensionInfo(object):
         ('minutes', 60),
         ('hours', 3600),
         ('days', 86400),
-        ('months', 2628000000), # this is the number geoserver computes for 1 month
+        # this is the number geoserver computes for 1 month
+        ('months', 2628000000),
         ('years', 31536000000)
     )
 
-    def __init__(self, name, enabled, presentation, resolution, units, unitSymbol, strategy=None, attribute=None, end_attribute=None, reference_value=None):
+    def __init__(self, name, enabled, presentation, resolution, units, unitSymbol,
+                 strategy=None, attribute=None, end_attribute=None, reference_value=None):
         self.name = name
         self.enabled = enabled
         self.attribute = attribute
@@ -332,8 +359,9 @@ class DimensionInfo(object):
 
     def _multipier(self, name):
         name = name.lower()
-        found = [ i[1] for i in self._lookup if i[0] == name ]
-        if not found: raise ValueError('invalid multipler: %s' % name)
+        found = [i[1] for i in self._lookup if i[0] == name]
+        if not found:
+            raise ValueError('invalid multipler: %s' % name)
         return found[0] if found else None
 
     def resolution_millis(self):
@@ -350,7 +378,8 @@ class DimensionInfo(object):
         seconds = self.resolution / 1000.
         biggest = self._lookup[0]
         for entry in self._lookup:
-            if seconds < entry[1]: break
+            if seconds < entry[1]:
+                break
             biggest = entry
         val = seconds / biggest[1]
         if val == int(val):
@@ -379,6 +408,7 @@ def md_dimension_info(name, node):
         child_text('referenceValue'),
     )
 
+
 def dynamic_default_values_info(builder, metadata):
     if isinstance(metadata, DynamicDefaultValues):
         builder.start("DynamicDefaultValues", dict())
@@ -403,16 +433,19 @@ def dynamic_default_values_info(builder, metadata):
             builder.end("configurations")
         builder.end("DynamicDefaultValues")
 
+
 class DynamicDefaultValuesConfiguration(object):
     def __init__(self, dimension, policy, defaultValueExpression):
         self.dimension = dimension
         self.policy = policy
         self.defaultValueExpression = defaultValueExpression
 
+
 class DynamicDefaultValues(object):
     def __init__(self, name, configurations):
         self.name = name
         self.configurations = configurations
+
 
 def md_dynamic_default_values_info(name, node):
     """Extract metadata Dynamic Default Values from an xml node"""
@@ -431,17 +464,20 @@ def md_dynamic_default_values_info(name, node):
 
     return DynamicDefaultValues(name, configurations)
 
+
 class JDBCVirtualTableGeometry(object):
     def __init__(self, _name, _type, _srid):
         self.name = _name
         self.type = _type
         self.srid = _srid
 
+
 class JDBCVirtualTableParam(object):
     def __init__(self, _name, _defaultValue, _regexpValidator):
         self.name = _name
         self.defaultValue = _defaultValue
         self.regexpValidator = _regexpValidator
+
 
 class JDBCVirtualTable(object):
     def __init__(self, _name, _sql, _escapeSql, _geometry, _keyColumn=None, _parameters=None):
@@ -451,6 +487,7 @@ class JDBCVirtualTable(object):
         self.geometry = _geometry
         self.keyColumn = _keyColumn
         self.parameters = _parameters
+
 
 def jdbc_virtual_table(builder, metadata):
     if isinstance(metadata, JDBCVirtualTable):
@@ -511,6 +548,7 @@ def jdbc_virtual_table(builder, metadata):
 
         builder.end("virtualTable")
 
+
 def md_jdbc_virtual_table(key, node):
     """Extract metadata JDBC Virtual Tables from an xml node"""
     name = node.find("name")
@@ -520,7 +558,7 @@ def md_jdbc_virtual_table(key, node):
     keyColumn = node.find("keyColumn")
     keyColumn = keyColumn.text if keyColumn is not None else None
     n_g = node.find("geometry")
-    geometry = JDBCVirtualTableGeometry(n_g.find("name"),n_g.find("type"),n_g.find("srid"))
+    geometry = JDBCVirtualTableGeometry(n_g.find("name"), n_g.find("type"), n_g.find("srid"))
     parameters = []
     for n_p in node.findall("parameter"):
         p_name = n_p.find("name")
@@ -531,6 +569,7 @@ def md_jdbc_virtual_table(key, node):
         parameters.append(JDBCVirtualTableParam(p_name, p_defaultValue, p_regexpValidator))
 
     return JDBCVirtualTable(name, sql, escapeSql, geometry, keyColumn, parameters)
+
 
 def md_entry(node):
     """Extract metadata entries from an xml node"""
@@ -555,14 +594,16 @@ def md_entry(node):
     else:
         return (key, value)
 
+
 def metadata(node):
     if node is not None:
         return dict(md_entry(n) for n in node.findall("entry"))
 
+
 def _decode_list(data):
     rv = []
     for item in data:
-        if isinstance(item, unicode):
+        if isinstance(item, basestring):
             item = item.encode('utf-8')
         elif isinstance(item, list):
             item = _decode_list(item)
@@ -571,12 +612,13 @@ def _decode_list(data):
         rv.append(item)
     return rv
 
+
 def _decode_dict(data):
     rv = {}
-    for key, value in data.iteritems():
-        if isinstance(key, unicode):
+    for key, value in data.items():
+        if isinstance(key, basestring):
             key = key.encode('utf-8')
-        if isinstance(value, unicode):
+        if isinstance(value, basestring):
             value = value.encode('utf-8')
         elif isinstance(value, list):
             value = _decode_list(value)
@@ -584,3 +626,12 @@ def _decode_dict(data):
             value = _decode_dict(value)
         rv[key] = value
     return rv
+
+
+def workspace_from_url(url):
+    parts = urlparse(url)
+    split_path = parts.path.split('/')
+    if 'workspaces' in split_path:
+        return split_path[split_path.index('workspaces') + 1]
+    else:
+        return None
