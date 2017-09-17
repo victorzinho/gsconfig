@@ -1046,3 +1046,46 @@ class Catalog(object):
             self._cache.pop("{}/workspaces.xml".format(self.service_url), None)
         else:
             raise FailedRequestError("no workspace named {}".format(name))
+
+    def list_feature_type_names(self, workspace, store, filter='available'):
+        if workspace is None:
+            raise ValueError("Must provide workspace")
+
+        if store is None:
+            raise ValueError("Must provide store")
+
+        filter = filter.lower()
+        workspace = _name(workspace)
+        store = _name(store)
+
+        url = "{}/workspaces/{}/datastores/{}/featuretypes.json?list={}".format(self.service_url, workspace, store, filter)
+        resp = self.http_request(url)
+        if resp.status_code != 200:
+            FailedRequestError('Failed to query feature_type_names')
+
+        data = []
+        if filter in ('available', 'available_with_geom'):
+            try:
+                data = resp.json()['list']['string']
+            except JSONDecodeError:
+                pass
+            return data
+        elif filter == 'configured':
+            data = resp.json()['featureTypes']['featureType']
+            return [fn['name'] for fn in data]
+        elif filter == 'all':
+            feature_type_names = []
+            url = "{}/workspaces/{}/datastores/{}/featuretypes.json?list=available".format(self.service_url, workspace, store)
+            resp = self.http_request(url)
+            if resp.status_code != 200:
+                FailedRequestError('Failed to query feature_type_names')
+            feature_type_names.extend(resp.json()['list']['string'])
+
+            url = "{}/workspaces/{}/datastores/{}/featuretypes.json?list=configured".format(self.service_url, workspace, store)
+            resp = self.http_request(url)
+            if resp.status_code != 200:
+                FailedRequestError('Failed to query feature_type_names')
+            data = resp.json()['featureTypes']['featureType']
+            feature_type_names.extend([fn['name'] for fn in data])
+
+            return feature_type_names
