@@ -9,7 +9,7 @@ except IOError,e:
     readme_text = ''
 
 setup(name = "gsconfig",
-    version = "1.0.6",
+    version = "1.0.8",
     description = "GeoServer REST Configuration",
     long_description = readme_text,
     keywords = "GeoServer REST Configuration",

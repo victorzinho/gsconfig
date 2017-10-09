@@ -303,7 +303,7 @@ class Catalog(object):
         if names is None:
             names = []
         elif isinstance(names, basestring):
-            names = map(str.strip, names.split(','))
+            names = map(str.strip, str(names).split(','))
         if stores and names:
             named_stores = []
             for store in stores:
@@ -375,6 +375,9 @@ class Catalog(object):
             params["update"] = "overwrite"
         if charset is not None:
             params["charset"] = charset
+        params["filename"] = "{}.zip".format(name)
+        params["target"] = "shp"
+        # params["configure"] = "all"
 
         headers = { 'Content-Type': 'application/zip', 'Accept': 'application/xml' }
         upload_url = url(self.service_url,
@@ -388,7 +391,8 @@ class Catalog(object):
                 if headers.status != 201:
                     raise UploadError(response)
         finally:
-            os.unlink(bundle)
+            # os.unlink(bundle)
+            pass
 
     def create_featurestore(self, name, data, workspace=None, overwrite=False, charset=None):
         if not overwrite:
@@ -464,17 +468,17 @@ class Catalog(object):
             if isinstance(data, basestring):
                 upload_data = data if data.startswith("file:") else "file:{data}".format(data=data)
             else:
-                raise ValueError("ImageMosaic Dataset or directory: {data} is incorrect".format(data=data)) 
+                raise ValueError("ImageMosaic Dataset or directory: {data} is incorrect".format(data=data))
 
         cs_url = url(
             self.service_url,
             [
-                "workspaces", 
-                workspace, 
-                "coveragestores", 
-                name, 
+                "workspaces",
+                workspace,
+                "coveragestores",
+                name,
                 store_type
-            ], 
+            ],
             params
         )
 
@@ -590,7 +594,7 @@ class Catalog(object):
                 "coveragestores",
                 store_name,
                 type
-            ], 
+            ],
             params
         )
 
@@ -630,7 +634,7 @@ class Catalog(object):
                 "index/granules",
                 granule_id,
                 ".json"
-            ], 
+            ],
             params
         )
 
@@ -669,14 +673,14 @@ class Catalog(object):
         cs_url = url(
             self.service_url,
             [
-                "workspaces", 
-                workspace_name, 
-                "coveragestores", 
-                store_name, 
-                "coverages", 
-                coverage, 
+                "workspaces",
+                workspace_name,
+                "coveragestores",
+                store_name,
+                "coverages",
+                coverage,
                 "index/granules.json"
-            ], 
+            ],
             params
         )
 
@@ -707,12 +711,12 @@ class Catalog(object):
         cs_url = url(
             self.service_url,
             [
-                "workspaces", 
-                store.workspace.name, 
-                "coveragestores", 
-                store.name, 
+                "workspaces",
+                store.workspace.name,
+                "coveragestores",
+                store.name,
                 "coverages.json"
-            ], 
+            ],
             params
         )
         # GET /workspaces/<ws>/coveragestores/<name>/coverages.json
@@ -734,14 +738,14 @@ class Catalog(object):
         cs_url = url(
             self.service_url,
             [
-                "workspaces", 
-                workspace, 
-                "coveragestores", 
-                store, 
-                "coverages", 
-                coverage, 
+                "workspaces",
+                workspace,
+                "coveragestores",
+                store,
+                "coverages",
+                coverage,
                 "index.json"
-            ], 
+            ],
             params
         )
         # GET /workspaces/<ws>/coveragestores/<name>/coverages/<coverage>/index.json
@@ -1002,7 +1006,7 @@ class Catalog(object):
         if names is None:
             names = []
         elif isinstance(names, basestring):
-            names = map(str.strip, names.split(','))
+            names = map(str.strip, str(names).split(','))
 
         description = self.get_xml("%s/workspaces.xml" % self.service_url)
         workspaces = []
