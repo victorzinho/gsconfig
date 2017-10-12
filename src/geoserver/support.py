@@ -145,6 +145,7 @@ def write_dict(name):
             if k == 'port':
                 v = str(v)
             builder.start("entry", dict(key=k))
+            v = v if isinstance(v, basestring) else str(v)
             builder.data(v)
             builder.end("entry")
         builder.end(name)

@@ -133,17 +133,25 @@ class CatalogTests(unittest.TestCase):
         # marking out test since geoserver default workspace is not consistent
         # self.assertEqual("cite", self.cat.get_default_workspace().name)
         self.assertEqual("topp", self.cat.get_workspace("topp").name)
+        self.assertEqual("topp", self.cat.get_workspaces("topp")[-1].name)
+        self.assertEqual(2, len(self.cat.get_workspaces(names = ['topp', 'sde'])))
+        self.assertEqual(2, len(self.cat.get_workspaces(names = 'topp, sde')))
 
 
     def testStores(self):
+        self.assertEqual(0, len(self.cat.get_stores("nonexistentstore")))
         topp = self.cat.get_workspace("topp")
         sf = self.cat.get_workspace("sf")
         self.assertEqual(9, len(self.cat.get_stores()))
-        self.assertEqual(2, len(self.cat.get_stores(topp)))
-        self.assertEqual(2, len(self.cat.get_stores(sf)))
+        self.assertEqual(2, len(self.cat.get_stores(workspace=topp)))
+        self.assertEqual(2, len(self.cat.get_stores(workspace=sf)))
+        self.assertEqual(2, len(self.cat.get_stores(workspace='sf')))
+        self.assertEqual(2, len(self.cat.get_stores(names='states_shapefile, sfdem')))
+        self.assertEqual(2, len(self.cat.get_stores(names=['states_shapefile', 'sfdem'])))
+        self.assertEqual("sfdem", self.cat.get_stores("sfdem")[-1].name)
         self.assertEqual("states_shapefile", self.cat.get_store("states_shapefile", topp).name)
         self.assertEqual("states_shapefile", self.cat.get_store("states_shapefile").name)
-        self.assertEqual("states_shapefile", self.cat.get_store("states_shapefile").name)
+        self.assertEqual("states_shapefile", self.cat.get_store("states_shapefile", "topp").name)
         self.assertEqual("sfdem", self.cat.get_store("sfdem", sf).name)
         self.assertEqual("sfdem", self.cat.get_store("sfdem").name)
 
@@ -273,18 +281,7 @@ class CatalogTests(unittest.TestCase):
         # misconstructed URLS
         self.cat.get_style("best style ever")
         self.cat.get_workspace("best workspace ever")
-        try:
-            self.cat.get_store(workspace="best workspace ever",
-                name="best store ever")
-            self.fail('expected exception')
-        except FailedRequestError, fre:
-            self.assertEqual('No store found named: best store ever', fre.message)
-        try:
-            self.cat.get_resource(workspace="best workspace ever",
-                store="best store ever",
-                name="best resource ever")
-        except FailedRequestError, fre:
-            self.assertEqual('No store found named: best store ever', fre.message)
+        self.assertEquals(self.cat.get_store(workspace="best workspace ever", name="best store ever"), None)
         self.cat.get_layer("best layer ever")
         self.cat.get_layergroup("best layergroup ever")
 
@@ -521,7 +518,7 @@ class ModifyingTests(unittest.TestCase):
         wmsstore.type = "WMS"
         self.cat.save(wmsstore)
         wmsstore = self.cat.get_store("wmsstore")
-        self.assertEqual(1, len(self.cat.get_stores(wmstest)))
+        self.assertEqual(1, len(self.cat.get_stores(workspace=wmstest)))
         available_layers = wmsstore.get_resources(available=True)
         for layer in available_layers:
             # sanitize the layer name - validation will fail on newer geoservers
@@ -846,9 +843,39 @@ class ModifyingTests(unittest.TestCase):
         # delete granule from mosaic
         coverage = name
         store = self.cat.get_store(name)
+        granules = self.cat.list_granules(coverage, store)
+        self.assertEqual(1, len(granules['features']))
         granule_id = name + '.1'
         self.cat.mosaic_delete_granule(coverage, store, granule_id)
+        granules = self.cat.list_granules(coverage, store)
+        self.assertEqual(0, len(granules['features']))
 
+        '''
+          testing external Image mosaic creation
+        '''
+        name = 'cea_mosaic_external'
+        path = os.path.join(os.getcwd(), 'test/data/mosaic/external')
+        self.cat.create_imagemosaic(name, path, workspace = 'topp')
+        self.cat._cache.clear()
+        resource = self.cat.get_layer("external").resource
+        self.assert_(resource is not None)
+        
+        # add granule to mosaic
+        granule_path = os.path.join(os.getcwd(), 'test/data/mosaic/granules/cea_20150102.tif')
+        self.cat.add_granule(granule_path, name, workspace='topp')
+        granules = self.cat.list_granules("external", name, 'topp')
+        self.assertEqual(2, len(granules['features']))
+
+        # add external granule to mosaic
+        granule_path = os.path.join(os.getcwd(), 'test/data/mosaic/granules/cea_20150103.zip')
+        self.cat.add_granule(granule_path, name, workspace='topp')
+        granules = self.cat.list_granules("external", name, 'topp')
+        self.assertEqual(3, len(granules['features']))
+
+        # Delete store
+        store = self.cat.get_store(name)
+        self.cat.delete(store, purge=True, recurse=True)
+        self.cat._cache.clear()
 
     def testTimeDimension(self):
         sf = self.cat.get_workspace("sf")

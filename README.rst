@@ -252,7 +252,7 @@ By default the ImageMosaic layer has not the coverage dimensions configured. It 
     coverage.metadata = ({'dirName':'NOAAWW3_NCOMultiGrid_WIND_test_NOAAWW3_NCOMultiGrid_WIND_test', 'time': timeInfo})
     cat.save(coverage)
 
-One the ImageMosaic has been configures, it is possible to read the coverages along with their granule schema and granule info.
+Once the ImageMosaic has been configured, it is possible to read the coverages along with their granule schema and granule info.
 
 .. code-block:: python
 
@@ -261,7 +261,7 @@ One the ImageMosaic has been configures, it is possible to read the coverages al
     store = cat.get_store("NOAAWW3_NCOMultiGrid_WIND_test")
     coverages = cat.mosaic_coverages(store)
     schema = cat.mosaic_coverage_schema(coverages['coverages']['coverage'][0]['name'], store)
-    granules = cat.mosaic_granules(coverages['coverages']['coverage'][0]['name'], store)
+    granules = cat.list_granules(coverages['coverages']['coverage'][0]['name'], store)
 
 The granules details can be easily read by doing something like this:
 
@@ -277,6 +277,6 @@ When the mosaic grows up and starts having a huge set of granules, you may need 
 
 .. code-block:: python
 
-    granules = cat.mosaic_granules(coverages['coverages']['coverage'][0]['name'], store, "time >= '2013-10-01T03:00:00.000Z'")
-    granules = cat.mosaic_granules(coverages['coverages']['coverage'][0]['name'], store, "time >= '2013-10-01T03:00:00.000Z' AND run = 0")
-    granules = cat.mosaic_granules(coverages['coverages']['coverage'][0]['name'], store, "location LIKE '%20131002T000000.tif'")
+    granules = cat.list_granules(coverages['coverages']['coverage'][0]['name'], store, "time >= '2013-10-01T03:00:00.000Z'")
+    granules = cat.list_granules(coverages['coverages']['coverage'][0]['name'], store, "time >= '2013-10-01T03:00:00.000Z' AND run = 0")
+    granules = cat.list_granules(coverages['coverages']['coverage'][0]['name'], store, "location LIKE '%20131002T000000.tif'")

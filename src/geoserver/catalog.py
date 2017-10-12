@@ -20,7 +20,7 @@ from geoserver.style import Style
 from geoserver.support import prepare_upload_bundle, url, _decode_list, _decode_dict, JDBCVirtualTable
 from geoserver.layergroup import LayerGroup, UnsavedLayerGroup
 from geoserver.workspace import workspace_from_index, Workspace
-from os import unlink
+import os
 import httplib2
 from xml.etree.ElementTree import XML
 from xml.parsers.expat import ExpatError
@@ -250,63 +250,68 @@ class Catalog(object):
         return response
 
     def get_store(self, name, workspace=None):
+        '''
+          Returns a single store object.
+          Will return None if no store is found.
+          Will raise an error if more than one store with the same name is found.
+        '''
 
-        # Make sure workspace is a workspace object and not a string.
-        # If the workspace does not exist, continue as if no workspace had been defined.
-        if isinstance(workspace, basestring):
-            workspace = self.get_workspace(workspace)
+        stores = self.get_stores(workspace=workspace, names=name)
 
-        # Create a list with potential workspaces to look into
-        # if a workspace is defined, it will contain only that workspace
-        # if no workspace is defined, the list will contain all workspaces.
+        if stores.__len__() == 0:
+            return None
+        elif stores.__len__() > 1:
+            multiple_stores = []
+            for s in stores:
+                multiple_stores.append("{workspace_name}:{store_name}".format(workspace_name=s.workspace.name, store_name=s.name))
+
+            raise AmbiguousRequestError("Multiple stores found named {name} - {stores}".format(name=name, stores=", ".join(multiple_stores)))
+        else:
+            return stores[0]
+
+    def get_stores(self, names=None, workspace=None):
+        '''
+          Returns a list of stores in the catalog. If workspace is specified will only return stores in that workspace.
+          If names is specified, will only return stores that match.
+          names can either be a comma delimited string or an array.
+          If names is specified will only return stores that match the name.
+          Will return an empty list if no stores are found.
+        '''
+
         workspaces = []
-
-        if workspace is None:
-            workspaces.extend(self.get_workspaces())
-        else:
-            workspaces.append(workspace)
-
-        # Iterate over all workspaces to find the stores or store
-        found_stores = {}
-        for ws in workspaces:
-            # Get all the store objects from geoserver
-            raw_stores = self.get_stores(workspace=ws)
-            # And put it in a dictionary where the keys are the name of the store,
-            new_stores = dict(zip([s.name for s in raw_stores], raw_stores))
-            # If the store is found, put it in a dict that also takes into account the
-            # worspace.
-            if name in new_stores:
-                found_stores[ws.name + ':' + name] = new_stores[name]
-
-        # There are 3 cases:
-        #    a) No stores are found.
-        #    b) Only one store is found.
-        #    c) More than one is found.
-        if len(found_stores) == 0:
-            raise FailedRequestError("No store found named: " + name)
-        elif len(found_stores) > 1:
-            raise AmbiguousRequestError("Multiple stores found named '" + name + "': "+ found_stores.keys())
-        else:
-            return found_stores.values()[0]
-
-
-    def get_stores(self, workspace=None):
         if workspace is not None:
             if isinstance(workspace, basestring):
-                workspace = self.get_workspace(workspace)
-            ds_list = self.get_xml(workspace.datastore_url)
-            cs_list = self.get_xml(workspace.coveragestore_url)
-            wms_list = self.get_xml(workspace.wmsstore_url)
-            datastores = [datastore_from_index(self, workspace, n) for n in ds_list.findall("dataStore")]
-            coveragestores = [coveragestore_from_index(self, workspace, n) for n in cs_list.findall("coverageStore")]
-            wmsstores = [wmsstore_from_index(self, workspace, n) for n in wms_list.findall("wmsStore")]
-            return datastores + coveragestores + wmsstores
+                ws = self.get_workspaces(workspace)
+                if ws:
+                    # There can only be one workspace with this name
+                    workspaces.append(ws[0])
+            elif hasattr(workspace, 'resource_type') and workspace.resource_type == "workspace":
+              workspaces.append(workspace)
         else:
-            stores = []
-            for ws in self.get_workspaces():
-                a = self.get_stores(ws)
-                stores.extend(a)
-            return stores
+            workspaces = self.get_workspaces()
+
+        stores = []
+        if workspaces:
+            for ws in workspaces:
+                ds_list = self.get_xml(ws.datastore_url)
+                cs_list = self.get_xml(ws.coveragestore_url)
+                wms_list = self.get_xml(ws.wmsstore_url)
+                stores.extend([datastore_from_index(self, ws, n) for n in ds_list.findall("dataStore")])
+                stores.extend([coveragestore_from_index(self, ws, n) for n in cs_list.findall("coverageStore")])
+                stores.extend([wmsstore_from_index(self, ws, n) for n in wms_list.findall("wmsStore")])
+
+        if names is None:
+            names = []
+        elif isinstance(names, basestring):
+            names = map(str.strip, str(names).split(','))
+        if stores and names:
+            named_stores = []
+            for store in stores:
+                if store.name in names:
+                    named_stores.append(store)
+            return named_stores
+
+        return stores
 
     def create_datastore(self, name, workspace=None):
         if isinstance(workspace, basestring):
@@ -370,6 +375,9 @@ class Catalog(object):
             params["update"] = "overwrite"
         if charset is not None:
             params["charset"] = charset
+        params["filename"] = "{}.zip".format(name)
+        params["target"] = "shp"
+        # params["configure"] = "all"
 
         headers = { 'Content-Type': 'application/zip', 'Accept': 'application/xml' }
         upload_url = url(self.service_url,
@@ -383,19 +391,17 @@ class Catalog(object):
                 if headers.status != 201:
                     raise UploadError(response)
         finally:
-            unlink(bundle)
+            # os.unlink(bundle)
+            pass
 
     def create_featurestore(self, name, data, workspace=None, overwrite=False, charset=None):
         if not overwrite:
-            try:
-                store = self.get_store(name, workspace)
+            store = self.get_store(name, workspace)
+            if store is not None:
                 msg = "There is already a store named " + name
                 if workspace:
                     msg += " in " + str(workspace)
                 raise ConflictingDataError(msg)
-            except FailedRequestError:
-                # we don't really expect that every layer name will be taken
-                pass
 
         if workspace is None:
             workspace = self.get_default_workspace()
@@ -426,19 +432,16 @@ class Catalog(object):
                 raise UploadError(response)
         finally:
             message.close()
-            unlink(archive)
+            os.unlink(archive)
 
     def create_imagemosaic(self, name, data, configure=None, workspace=None, overwrite=False, charset=None):
         if not overwrite:
-            try:
-                store = self.get_store(name, workspace)
+            store = self.get_store(name, workspace)
+            if store is not None:
                 msg = "There is already a store named " + name
                 if workspace:
                     msg += " in " + str(workspace)
                 raise ConflictingDataError(msg)
-            except FailedRequestError:
-                # we don't really expect that every layer name will be taken
-                pass
 
         if workspace is None:
             workspace = self.get_default_workspace()
@@ -448,26 +451,53 @@ class Catalog(object):
             params['charset'] = charset
         if configure is not None:
             params['configure'] = "none"
-        cs_url = url(self.service_url,
-            ["workspaces", workspace, "coveragestores", name, "file.imagemosaic"], params)
+
+        if isinstance(data, file) or os.path.splitext(data)[-1] == ".zip":
+            store_type = "file.imagemosaic"
+            contet_type = "application/zip"
+            if isinstance(data, basestring):
+                upload_data = open(data, 'rb')
+            elif isinstance(data, file):
+                # Adding this check only to pass tests. We should drop support for passing a file object
+                upload_data = data
+            else:
+                raise ValueError("ImageMosaic Dataset or directory: {data} is incorrect".format(data=data))
+        else:
+            store_type = "external.imagemosaic"
+            contet_type = "text/plain"
+            if isinstance(data, basestring):
+                upload_data = data if data.startswith("file:") else "file:{data}".format(data=data)
+            else:
+                raise ValueError("ImageMosaic Dataset or directory: {data} is incorrect".format(data=data))
+
+        cs_url = url(
+            self.service_url,
+            [
+                "workspaces",
+                workspace,
+                "coveragestores",
+                name,
+                store_type
+            ],
+            params
+        )
 
         # PUT /workspaces/<ws>/coveragestores/<name>/file.imagemosaic?configure=none
-        headers = {
-            "Content-type": "application/zip",
+        req_headers = {
+            "Content-type": contet_type,
             "Accept": "application/xml"
         }
-        if isinstance(data, basestring):
-            message = open(data, 'rb')
-        else:
-            message = data
+
         try:
-            headers, response = self.http.request(cs_url, "PUT", message, headers)
+            resp_headers, response = self.http.request(cs_url, "PUT", upload_data, req_headers)
             self._cache.clear()
-            if headers.status != 201:
+            if resp_headers.status != 201:
                 raise UploadError(response)
         finally:
-            if hasattr(message, "close"):
-                message.close()
+            if hasattr(upload_data, "close"):
+                upload_data.close()
+
+        return "Image Mosaic created"
 
     def create_coveragestore(self, name, data, workspace=None, overwrite=False):
         self._create_coveragestore(name, data, workspace, overwrite)
@@ -477,15 +507,12 @@ class Catalog(object):
 
     def _create_coveragestore(self, name, data, workspace=None, overwrite=False, external=False):
         if not overwrite:
-            try:
-                store = self.get_store(name, workspace)
+            store = self.get_store(name, workspace)
+            if store is not None:
                 msg = "There is already a store named " + name
                 if workspace:
                     msg += " in " + str(workspace)
                 raise ConflictingDataError(msg)
-            except FailedRequestError:
-                # we don't really expect that every layer name will be taken
-                pass
 
         if workspace is None:
             workspace = self.get_default_workspace()
@@ -529,108 +556,219 @@ class Catalog(object):
             if hasattr(message, "close"):
                 message.close()
             if archive is not None:
-                unlink(archive)
+                os.unlink(archive)
 
-    def harvest_externalgranule(self, data, store):
-        '''Harvest a granule into an existing imagemosaic'''
-        params = dict()
-        cs_url = url(self.service_url,
-            ["workspaces", store.workspace.name, "coveragestores", store.name, "external.imagemosaic"], params)
-        # POST /workspaces/<ws>/coveragestores/<name>/external.imagemosaic
-        headers = {
-            "Content-type": "text/plain",
-            "Accept": "application/xml"
-        }
-        headers, response = self.http.request(cs_url, "POST", data, headers)
-        self._cache.clear()
-        if headers.status != 202:
-            raise UploadError(response)
+    def add_granule(self, data, store, workspace=None):
+        '''Harvest/add a granule into an existing imagemosaic'''
+        ext = os.path.splitext(data)[-1]
+        if ext == ".zip":
+            type = "file.imagemosaic"
+            upload_data = open(data, 'rb')
+            headers = {
+              "Content-type": "application/zip",
+              "Accept": "application/xml"
+            }
+        else:
+            type = "external.imagemosaic"
+            upload_data = data if data.startswith("file:") else "file:{data}".format(data=data)
+            headers = {
+                "Content-type": "text/plain",
+                "Accept": "application/xml"
+            }
 
-    def harvest_uploadgranule(self, data, store):
-        '''Harvest a granule into an existing imagemosaic'''
         params = dict()
-        cs_url = url(self.service_url,
-            ["workspaces", store.workspace.name, "coveragestores", store.name, "file.imagemosaic"], params)
-        # POST /workspaces/<ws>/coveragestores/<name>/file.imagemosaic
-        headers = {
-            "Content-type": "application/zip",
-            "Accept": "application/xml"
-        }
-        message = open(data, 'rb')
+        workspace_name = workspace
+        if isinstance(store, basestring):
+            store_name = store
+        else:
+            store_name = store.name
+            workspace_name = store.workspace.name
+
+        if workspace_name is None: raise ValueError("Must specify workspace")
+
+        cs_url = url(
+            self.service_url,
+            [
+                "workspaces",
+                workspace_name,
+                "coveragestores",
+                store_name,
+                type
+            ],
+            params
+        )
+
         try:
-            headers, response = self.http.request(cs_url, "POST", message, headers)
-            self._cache.clear()
+            headers, response = self.http.request(cs_url, "POST", upload_data, headers)
             if headers.status != 202:
                 raise UploadError(response)
         finally:
-            if hasattr(message, "close"):
-                message.close()
+            if hasattr(upload_data, "close"):
+                  upload_data.close()
 
-    def mosaic_coverages(self, store):
-        '''Print granules of an existing imagemosaic'''
+        self._cache.clear()
+        return "Added granule"
+
+    def delete_granule(self, coverage, store, granule_id, workspace=None):
+        '''Deletes a granule of an existing imagemosaic'''
         params = dict()
-        cs_url = url(self.service_url,
-            ["workspaces", store.workspace.name, "coveragestores", store.name, "coverages.json"], params)
-        # GET /workspaces/<ws>/coveragestores/<name>/coverages.json
+
+        workspace_name = workspace
+        if isinstance(store, basestring):
+            store_name = store
+        else:
+            store_name = store.name
+            workspace_name = store.workspace.name
+
+        if workspace_name is None: raise ValueError("Must specify workspace")
+
+        cs_url = url(
+            self.service_url,
+            [
+                "workspaces",
+                workspace_name,
+                "coveragestores",
+                store_name,
+                "coverages",
+                coverage,
+                "index/granules",
+                granule_id,
+                ".json"
+            ],
+            params
+        )
+
+        # DELETE /workspaces/<ws>/coveragestores/<name>/coverages/<coverage>/index/granules/<granule_id>.json
         headers = {
             "Content-type": "application/json",
             "Accept": "application/json"
         }
-        headers, response = self.http.request(cs_url, "GET", None, headers)
-        self._cache.clear()
-        coverages = json.loads(response, object_hook=_decode_dict)
-        return coverages
 
-    def mosaic_coverage_schema(self, coverage, store):
-        '''Print granules of an existing imagemosaic'''
-        params = dict()
-        cs_url = url(self.service_url,
-            ["workspaces", store.workspace.name, "coveragestores", store.name, "coverages", coverage, "index.json"], params)
-        # GET /workspaces/<ws>/coveragestores/<name>/coverages/<coverage>/index.json
-        headers = {
-            "Content-type": "application/json",
-            "Accept": "application/json"
-        }
-        headers, response = self.http.request(cs_url, "GET", None, headers)
+        headers, response = self.http.request(cs_url, "DELETE", None, headers)
+        if headers.status != 200:
+            raise FailedRequestError(response)
         self._cache.clear()
-        schema = json.loads(response, object_hook=_decode_dict)
-        return schema
+        return "Deleted granule"
 
-    def mosaic_granules(self, coverage, store, filter=None, limit=None, offset=None):
-        '''Print granules of an existing imagemosaic'''
+    def list_granules(self, coverage, store, workspace=None, filter=None, limit=None, offset=None):
+        '''List granules of an imagemosaic'''
         params = dict()
+
         if filter is not None:
             params['filter'] = filter
         if limit is not None:
             params['limit'] = limit
         if offset is not None:
             params['offset'] = offset
-        cs_url = url(self.service_url,
-            ["workspaces", store.workspace.name, "coveragestores", store.name, "coverages", coverage, "index/granules.json"], params)
+
+        workspace_name = workspace
+        if isinstance(store, basestring):
+            store_name = store
+        else:
+            store_name = store.name
+            workspace_name = store.workspace.name
+
+        if workspace_name is None: raise ValueError("Must specify workspace")
+
+        cs_url = url(
+            self.service_url,
+            [
+                "workspaces",
+                workspace_name,
+                "coveragestores",
+                store_name,
+                "coverages",
+                coverage,
+                "index/granules.json"
+            ],
+            params
+        )
+
         # GET /workspaces/<ws>/coveragestores/<name>/coverages/<coverage>/index/granules.json
         headers = {
             "Content-type": "application/json",
             "Accept": "application/json"
         }
+
         headers, response = self.http.request(cs_url, "GET", None, headers)
+        if headers.status != 200:
+            raise FailedRequestError(response)
         self._cache.clear()
         granules = json.loads(response, object_hook=_decode_dict)
         return granules
 
-    def mosaic_delete_granule(self, coverage, store, granule_id):
-        '''Deletes a granule of an existing imagemosaic'''
+    def harvest_externalgranule(self, data, store):
+        '''Harvest a granule into an existing imagemosaic'''
+        self.add_granule(data, store)
+
+    def harvest_uploadgranule(self, data, store):
+        '''Harvest a granule into an existing imagemosaic'''
+        self.add_granule(data, store)
+
+    def mosaic_coverages(self, store):
+        '''Returns all coverages in a coverage store'''
         params = dict()
-        cs_url = url(self.service_url,
-            ["workspaces", store.workspace.name, "coveragestores", store.name, "coverages", coverage, "index/granules", granule_id,".json"], params)
-        # DELETE /workspaces/<ws>/coveragestores/<name>/coverages/<coverage>/index/granules/<granule_id>.json
+        cs_url = url(
+            self.service_url,
+            [
+                "workspaces",
+                store.workspace.name,
+                "coveragestores",
+                store.name,
+                "coverages.json"
+            ],
+            params
+        )
+        # GET /workspaces/<ws>/coveragestores/<name>/coverages.json
         headers = {
             "Content-type": "application/json",
             "Accept": "application/json"
         }
-        headers, response = self.http.request(cs_url, "DELETE", None, headers)
-        self._cache.clear()
+
+        headers, response = self.http.request(cs_url, "GET", None, headers)
         if headers.status != 200:
             raise FailedRequestError(response)
+        self._cache.clear()
+        coverages = json.loads(response, object_hook=_decode_dict)
+        return coverages
+
+    def mosaic_coverage_schema(self, coverage, store, workspace):
+        '''Returns the schema of a coverage in a coverage store'''
+        params = dict()
+        cs_url = url(
+            self.service_url,
+            [
+                "workspaces",
+                workspace,
+                "coveragestores",
+                store,
+                "coverages",
+                coverage,
+                "index.json"
+            ],
+            params
+        )
+        # GET /workspaces/<ws>/coveragestores/<name>/coverages/<coverage>/index.json
+
+        headers = {
+            "Content-type": "application/json",
+            "Accept": "application/json"
+        }
+
+        headers, response = self.http.request(cs_url, "GET", None, headers)
+        if headers.status != 200:
+            raise FailedRequestError(response)
+        self._cache.clear()
+        schema = json.loads(response, object_hook=_decode_dict)
+        return schema
+
+    def mosaic_granules(self, coverage, store, filter=None, limit=None, offset=None):
+        '''List granules of an imagemosaic'''
+        return self.list_granules(coverage, store, filter=None, limit=None, offset=None)
+
+    def mosaic_delete_granule(self, coverage, store, granule_id):
+        '''Deletes a granule of an existing imagemosaic'''
+        self.delete_granule(coverage, store, granule_id)
 
     def publish_featuretype(self, name, store, native_crs, srs=None, jdbc_virtual_table=None):
         '''Publish a featuretype from data in an existing store'''
@@ -682,7 +820,7 @@ class Catalog(object):
                 return candidates[0]
 
         if workspace is not None:
-            for store in self.get_stores(workspace):
+            for store in self.get_stores(workspace=workspace):
                 resource = self.get_resource(name, store)
                 if resource is not None:
                     return resource
@@ -715,7 +853,7 @@ class Catalog(object):
             return store.get_resources()
         if workspace is not None:
             resources = []
-            for store in self.get_stores(workspace):
+            for store in self.get_stores(workspace=workspace):
                 resources.extend(self.get_resources(store))
             return resources
         resources = []
@@ -854,20 +992,50 @@ class Catalog(object):
         headers, response = self.http.request(workspace_url, "POST", xml, headers)
         assert 200 <= headers.status < 300, "Tried to create workspace but got " + str(headers.status) + ": " + response
         self._cache.pop("%s/workspaces.xml" % self.service_url, None)
-        return self.get_workspace(name)
+        workspaces = self.get_workspaces(name)
+        # Can only have one workspace with this name
+        return workspaces[0] if workspaces else None
 
-    def get_workspaces(self):
+    def get_workspaces(self, names=None):
+        '''
+          Returns a list of workspaces in the catalog.
+          If names is specified, will only return workspaces that match.
+          names can either be a comma delimited string or an array.
+          Will return an empty list if no workspaces are found.
+        '''
+        if names is None:
+            names = []
+        elif isinstance(names, basestring):
+            names = map(str.strip, str(names).split(','))
+
         description = self.get_xml("%s/workspaces.xml" % self.service_url)
-        return [workspace_from_index(self, node) for node in description.findall("workspace")]
+        workspaces = []
+        workspaces.extend([workspace_from_index(self, node) for node in description.findall("workspace")])
+
+        if workspaces and names:
+            named_workspaces = []
+            for ws in workspaces:
+                if ws.name in names:
+                    named_workspaces.append(ws)
+            return named_workspaces
+
+        return workspaces
 
     def get_workspace(self, name):
-        candidates = [w for w in self.get_workspaces() if w.name == name]
-        if len(candidates) == 0:
+        '''
+          returns a single workspace object.
+          Will return None if no workspace is found.
+          Will raise an error if more than one workspace with the same name is found.
+        '''
+
+        workspaces = self.get_workspaces(name)
+
+        if len(workspaces) == 0:
             return None
-        elif len(candidates) > 1:
+        elif len(workspaces) > 1:
             raise AmbiguousRequestError()
         else:
-            return candidates[0]
+            return workspaces[0]
 
     def get_default_workspace(self):
         ws = Workspace(self, "default")
