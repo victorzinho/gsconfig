@@ -11,7 +11,8 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-
+   api/geoserver
+   api/modules
 
 Indices and tables
 ==================
