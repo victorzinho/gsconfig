@@ -1,0 +1,5 @@
+site_name: gsconfig
+theme: 'material'
+markdown_extensions: [codehilite]
+pages:
+- Home: index.md
